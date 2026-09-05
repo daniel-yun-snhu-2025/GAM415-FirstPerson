@@ -1,0 +1,34 @@
+# Unreal Engine generated files
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Generated files in plugins
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
+
+# IDE and editor files
+.vs/
+.idea/
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+
+# Visual Studio build files
+*.csproj
+*.csproj.user
+*.sln.docstates
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local logs and crash reports
+*.log
+crashinfo--*
