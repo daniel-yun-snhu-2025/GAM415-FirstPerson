@@ -10,6 +10,9 @@ class USphereComponent;
 class UProjectileMovementComponent;
 class ACharacter;
 class UPrimitiveComponent;
+class UStaticMeshComponent;
+class UMaterialInterface;
+class UMaterialInstanceDynamic;
 
 /**
  *  Simple projectile class for a first person shooter game
@@ -26,6 +29,28 @@ class FIRSTPERSON415_API AShooterProjectile : public AActor
 	/** Handles movement for the projectile */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UProjectileMovementComponent* ProjectileMovement;
+
+public:
+
+	/** GAM 415: visible projectile mesh (set to FirstPersonProjectileMesh in the Blueprint) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Projectile|GAM415")
+	UStaticMeshComponent* ballMesh;
+
+	/** GAM 415: decal material spawned on hit (Splat material) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Projectile|GAM415")
+	UMaterialInterface* baseMat;
+
+	/** GAM 415: material used for the projectile mesh (Projectile_Color) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Projectile|GAM415")
+	UMaterialInterface* projMat;
+
+	/** GAM 415: dynamic instance of projMat applied to ballMesh */
+	UPROPERTY()
+	UMaterialInstanceDynamic* dmiMat;
+
+	/** GAM 415: random color chosen at BeginPlay, shared by the mesh and the decal */
+	UPROPERTY(BlueprintReadOnly, Category="Projectile|GAM415")
+	FLinearColor randColor;
 
 protected:
 

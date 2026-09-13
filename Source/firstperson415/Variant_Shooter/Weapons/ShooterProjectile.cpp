@@ -12,6 +12,11 @@
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
+#include "Components/StaticMeshComponent.h"
+#include "Components/DecalComponent.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Kismet/KismetMathLibrary.h"
 
 AShooterProjectile::AShooterProjectile()
 {
@@ -24,6 +29,11 @@ AShooterProjectile::AShooterProjectile()
 	CollisionComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	CollisionComponent->SetCollisionResponseToAllChannels(ECR_Block);
 	CollisionComponent->CanCharacterStepUpOn = ECanBeCharacterBase::ECB_No;
+
+	// GAM 415: create the visible ball mesh and attach it to the collision component
+	ballMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Ball Mesh"));
+	ballMesh->SetupAttachment(CollisionComponent);
+	ballMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	// create the projectile movement component. No need to attach it because it's not a Scene Component
 	ProjectileMovement = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("Projectile Movement"));
@@ -42,6 +52,20 @@ void AShooterProjectile::BeginPlay()
 	
 	// ignore the pawn that shot this projectile
 	CollisionComponent->IgnoreActorWhenMoving(GetInstigator(), true);
+
+	// GAM 415: pick a random color for this projectile and apply it to the mesh through a dynamic material instance
+	randColor = FLinearColor(
+		UKismetMathLibrary::RandomFloatInRange(0.0f, 1.0f),
+		UKismetMathLibrary::RandomFloatInRange(0.0f, 1.0f),
+		UKismetMathLibrary::RandomFloatInRange(0.0f, 1.0f),
+		1.0f);
+
+	if (projMat && ballMesh)
+	{
+		dmiMat = UMaterialInstanceDynamic::Create(projMat, this);
+		ballMesh->SetMaterial(0, dmiMat);
+		dmiMat->SetVectorParameterValue(TEXT("ProjColor"), randColor);
+	}
 }
 
 void AShooterProjectile::EndPlay(EEndPlayReason::Type EndPlayReason)
@@ -79,6 +103,24 @@ void AShooterProjectile::NotifyHit(class UPrimitiveComponent* MyComp, AActor* Ot
 		// single hit projectile. Process the collided actor
 		ProcessHit(Other, OtherComp, Hit.ImpactPoint, -Hit.ImpactNormal);
 
+	}
+
+	// GAM 415: spawn a paint splat decal on the surface we hit, matching the projectile color
+	if (Other != nullptr && baseMat != nullptr)
+	{
+		float frameNum = UKismetMathLibrary::RandomFloatInRange(0.0f, 3.0f);
+		FVector decalSize = FVector(UKismetMathLibrary::RandomFloatInRange(20.0f, 40.0f));
+
+		auto Decal = UGameplayStatics::SpawnDecalAtLocation(GetWorld(), baseMat, decalSize, Hit.Location, Hit.Normal.Rotation(), 0.0f);
+		if (Decal)
+		{
+			auto MatInstance = Decal->CreateDynamicMaterialInstance();
+			if (MatInstance)
+			{
+				MatInstance->SetVectorParameterValue(TEXT("Color"), randColor);
+				MatInstance->SetScalarParameterValue(TEXT("Frame"), frameNum);
+			}
+		}
 	}
 
 	// pass control to BP for any extra effects
