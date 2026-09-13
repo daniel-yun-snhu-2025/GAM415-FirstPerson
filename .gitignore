@@ -48,6 +48,3 @@ desktop.ini
 # Crash reports
 *.crash
 *.dmp
-
-# Local tool config
-.mcp.json
