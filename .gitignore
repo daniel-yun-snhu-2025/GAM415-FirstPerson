@@ -1,16 +1,8 @@
-# Unreal Engine generated files
-Binaries/
-Build/
-DerivedDataCache/
-Intermediate/
-Saved/
+# Unreal Engine project .gitignore (GAM 415 - firstperson415)
 
-# Generated files in plugins
-Plugins/*/Binaries/
-Plugins/*/Intermediate/
-
-# IDE and editor files
+# Visual Studio / IDE
 .vs/
+.vscode/
 .idea/
 *.sln
 *.suo
@@ -18,17 +10,44 @@ Plugins/*/Intermediate/
 *.sdf
 *.VC.db
 *.VC.opendb
+*.xcodeproj
+*.xcworkspace
+*.code-workspace
 
-# Visual Studio build files
-*.csproj
-*.csproj.user
-*.sln.docstates
+# Unreal generated folders (regenerable - do not commit)
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
 
-# Operating system files
+# Compile / link outputs
+*.pdb
+*.obj
+*.lib
+*.dll
+*.exe
+*.exp
+*.ilk
+*.ipa
+*.apk
+
+# Logs / caches
+*.log
+*.tmp
+*.bak
+*.orig
+
+# OS
 .DS_Store
 Thumbs.db
-Desktop.ini
+desktop.ini
 
-# Local logs and crash reports
-*.log
-crashinfo--*
+# Crash reports
+*.crash
+*.dmp
+
+# Local tool config
+.mcp.json
