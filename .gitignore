@@ -1,0 +1,50 @@
+# Unreal Engine project .gitignore (GAM 415 - firstperson415)
+
+# Visual Studio / IDE
+.vs/
+.vscode/
+.idea/
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+*.xcodeproj
+*.xcworkspace
+*.code-workspace
+
+# Unreal generated folders (regenerable - do not commit)
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
+
+# Compile / link outputs
+*.pdb
+*.obj
+*.lib
+*.dll
+*.exe
+*.exp
+*.ilk
+*.ipa
+*.apk
+
+# Logs / caches
+*.log
+*.tmp
+*.bak
+*.orig
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Crash reports
+*.crash
+*.dmp
