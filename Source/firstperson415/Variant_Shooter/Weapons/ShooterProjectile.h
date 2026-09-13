@@ -32,23 +32,51 @@ class FIRSTPERSON415_API AShooterProjectile : public AActor
 
 public:
 
-	/** GAM 415: visible projectile mesh (set to FirstPersonProjectileMesh in the Blueprint) */
+	// ---- GAM 415 Stepping Stone One: colored projectile mesh + matching splat decal ----
+	//
+	// Rendering summary:
+	//  * ballMesh is a normal static mesh draw. Its material (Projectile_Color) exposes one
+	//    vector parameter, "ProjColor", wired to Base Color.
+	//  * At BeginPlay we create a Dynamic Material Instance (DMI) of that material for THIS
+	//    projectile only and write randColor into "ProjColor". A DMI shares the compiled
+	//    shaders of its parent and only owns a private parameter block, so hundreds of
+	//    projectiles with different colors cost no extra shader compiles.
+	//  * On hit we spawn a deferred decal (Splat_Mat). A decal is a box volume that projects
+	//    its material onto whatever geometry is inside it, using the scene depth buffer to
+	//    find the surface, and writes into the deferred shading buffers of that surface.
+	//    Its DMI gets the same randColor plus a random SubUV "Frame", so mesh and splat match.
+
+	/**
+	 *  Visible projectile mesh (set to FirstPersonProjectileMesh, scale 0.125, in the Blueprint).
+	 *  Created in C++ rather than in the Blueprint so this class holds a direct reference and
+	 *  can swap its material at runtime.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Projectile|GAM415")
 	UStaticMeshComponent* ballMesh;
 
-	/** GAM 415: decal material spawned on hit (Splat material) */
+	/**
+	 *  Decal material spawned on hit (Splat_Mat). Material Domain = Deferred Decal,
+	 *  Blend Mode = Translucent, parameters: vector "Color", scalar "Frame".
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Projectile|GAM415")
 	UMaterialInterface* baseMat;
 
-	/** GAM 415: material used for the projectile mesh (Projectile_Color) */
+	/** Material used for the projectile mesh (Projectile_Color, vector parameter "ProjColor"). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Projectile|GAM415")
 	UMaterialInterface* projMat;
 
-	/** GAM 415: dynamic instance of projMat applied to ballMesh */
+	/**
+	 *  Dynamic instance of projMat applied to ballMesh element 0.
+	 *  Runtime only; a UPROPERTY so the garbage collector keeps it alive with the projectile.
+	 */
 	UPROPERTY()
 	UMaterialInstanceDynamic* dmiMat;
 
-	/** GAM 415: random color chosen at BeginPlay, shared by the mesh and the decal */
+	/**
+	 *  Random color chosen once at BeginPlay and shared by the mesh and the decal.
+	 *  Stored as a member (not a local) because BeginPlay and NotifyHit run at different times.
+	 *  FLinearColor is linear-space RGBA floats, the format material vector parameters expect.
+	 */
 	UPROPERTY(BlueprintReadOnly, Category="Projectile|GAM415")
 	FLinearColor randColor;
 
