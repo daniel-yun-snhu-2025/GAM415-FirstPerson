@@ -7,6 +7,8 @@
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "NiagaraFunctionLibrary.h"   // UNiagaraFunctionLibrary::SpawnSystemAttached
+#include "NiagaraComponent.h"         // UNiagaraComponent: the spawned instance we set variables on
 #include "firstperson415Character.h"
 
 ACubeDMIMod::ACubeDMIMod()
@@ -87,5 +89,28 @@ void ACubeDMIMod::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* Ot
 		// is the blend factor the output-merger uses against the already rendered scene.
 		float ranOpacity = UKismetMathLibrary::RandomFloatInRange(0.2f, 1.0f);
 		dmiMat->SetScalarParameterValue(TEXT("Opacity"), ranOpacity);
+
+		// Module 3: burst of particles in the same random color.
+		// colorP must be checked: calling the spawn function with a null system asserts/crashes,
+		// which is exactly what happens if the Blueprint property was left empty.
+		if (colorP)
+		{
+			// SpawnSystemAttached creates a UNiagaraComponent (one running instance of the
+			// system) and parents it to the component that overlapped us, at zero offset.
+			// Arguments: template, attach parent, socket/bone (none), relative location,
+			// relative rotation, how to interpret that transform, auto-destroy when finished.
+			UNiagaraComponent* particleComp = UNiagaraFunctionLibrary::SpawnSystemAttached(
+				colorP, OtherComp, NAME_None, FVector(0.0f), FRotator(0.0f),
+				EAttachLocation::KeepRelativeOffset, true);
+
+			if (particleComp)
+			{
+				// Same idea as a material parameter: the emitters are already compiled, we only
+				// override the value of the exposed user parameter for THIS instance. Initialize
+				// Particle copies it into each particle's Color attribute at spawn, and the sprite
+				// renderer passes that attribute to the material as the Particle Color node.
+				particleComp->SetVariableLinearColor(FName("RandColor"), randColor);
+			}
+		}
 	}
 }

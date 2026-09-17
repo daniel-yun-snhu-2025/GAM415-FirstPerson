@@ -22,6 +22,7 @@ class UBoxComponent;
 class UStaticMeshComponent;
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
+class UNiagaraSystem;   // forward declaration: the header only stores a pointer, the .cpp includes the real type
 
 /**
  *  Cube that creates a Dynamic Material Instance from a base material and
@@ -78,6 +79,17 @@ public:
 	 */
 	UPROPERTY()
 	UMaterialInstanceDynamic* dmiMat;
+
+	/**
+	 *  Niagara particle system spawned when the player overlaps the cube (Confetti_P).
+	 *  A UNiagaraSystem is an asset: a set of emitters whose spawn/update scripts are compiled
+	 *  into VM bytecode (CPU sim) or compute shaders (GPU sim). The system exposes a
+	 *  "User.RandColor" linear color parameter that Initialize Particle reads, so code can
+	 *  recolor every particle of one spawned instance without editing the asset.
+	 *  Assigned in the Blueprint; may be null, so it is always checked before use.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Particles")
+	UNiagaraSystem* colorP;
 
 	/**
 	 *  Called when something overlaps the box component.
