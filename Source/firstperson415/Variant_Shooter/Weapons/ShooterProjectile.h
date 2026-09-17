@@ -13,6 +13,7 @@ class UPrimitiveComponent;
 class UStaticMeshComponent;
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
+class UNiagaraSystem;   // forward declaration; NiagaraSystem.h is only needed where the asset is used
 
 /**
  *  Simple projectile class for a first person shooter game
@@ -79,6 +80,21 @@ public:
 	 */
 	UPROPERTY(BlueprintReadOnly, Category="Projectile|GAM415")
 	FLinearColor randColor;
+
+	// ---- GAM 415 Stepping Stone Two: paint splatter particle system ----
+
+	/**
+	 *  Niagara system spawned at the impact point (Splat_P).
+	 *  The system has two emitters (a directional burst of droplets and slow hanging
+	 *  particulates) that both read one user parameter, "User.RandomColor", in their
+	 *  Initialize Particle module. Setting that single parameter from code therefore tints
+	 *  every emitter, which is how the particles match randColor on the mesh and the decal.
+	 *  Niagara simulates the particles (CPU VM or GPU compute) and its sprite renderer
+	 *  submits them as instanced camera-facing quads; the per-particle Color attribute
+	 *  reaches the material through the Particle Color node.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Projectile|GAM415")
+	UNiagaraSystem* colorP;
 
 protected:
 

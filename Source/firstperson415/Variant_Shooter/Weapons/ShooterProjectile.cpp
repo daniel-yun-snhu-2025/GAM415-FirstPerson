@@ -17,6 +17,8 @@
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "NiagaraFunctionLibrary.h"   // SpawnSystemAtLocation / SpawnSystemAttached
+#include "NiagaraComponent.h"         // UNiagaraComponent, to set user variables on the spawned instance
 
 AShooterProjectile::AShooterProjectile()
 {
@@ -157,6 +159,39 @@ void AShooterProjectile::NotifyHit(class UPrimitiveComponent* MyComp, AActor* Ot
 			}
 		}
 	}
+
+	// GAM 415 Stepping Stone Two: paint splatter particles in the same color as the ball and decal.
+	// colorP is an asset reference set in the Blueprint, so guard against it being empty;
+	// spawning a null system is what crashed the editor in the tutorial.
+	if (Other != nullptr && colorP != nullptr)
+	{
+		// Spawn one instance of the system at the impact point. The rotation is built from the
+		// surface normal so the emitters' local +X (the burst direction) points away from the
+		// wall or floor instead of into it. The tutorial attaches the system to a component;
+		// here the ball is about to be removed, so a free-standing component at a fixed world
+		// location is safer than something parented to a disappearing object. bAutoDestroy
+		// (the last 'true') releases the component once every particle has died.
+		UNiagaraComponent* particleComp = UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+			GetWorld(), colorP, Hit.Location, Hit.Normal.Rotation(), FVector(1.0f), true);
+
+		if (particleComp)
+		{
+			// One user parameter drives both emitters. This only overrides a value in the
+			// instance's parameter store; the compiled emitter scripts are shared by all
+			// instances, just like a dynamic material instance shares its parent's shaders.
+			particleComp->SetVariableLinearColor(FName("RandomColor"), randColor);
+		}
+	}
+
+	// Make the hit read as a splat: remove the visible ball and stop the actor where it landed.
+	// Without this the projectile keeps bouncing with collision off and looks like it passes
+	// through the wall it just painted.
+	if (ballMesh)
+	{
+		ballMesh->DestroyComponent();
+		ballMesh = nullptr;
+	}
+	ProjectileMovement->StopMovementImmediately();
 
 	// pass control to BP for any extra effects
 	BP_OnProjectileHit(Hit);
