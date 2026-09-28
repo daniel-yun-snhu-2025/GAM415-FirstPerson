@@ -198,6 +198,15 @@ void AShooterCharacter::UpdateWeaponHUD(int32 CurrentAmmo, int32 MagazineSize)
 
 FVector AShooterCharacter::GetWeaponTargetLocation()
 {
+	// GAM 415 Stepping Stone Three: this is the player's raytrace that drives terrain digging.
+	// A line trace (ray cast) runs from the first person camera along the view direction.
+	// It is a physics-scene query against collision shapes, not a render operation: the
+	// procedural terrain answers it because CreateMeshSection was called with collision
+	// enabled, which builds a triangle mesh collider from the same vertices the GPU draws.
+	// The weapon aims the projectile at the returned impact point, and when the projectile
+	// hits APerlinProcTerrain its NotifyHit calls AlterMesh with that point, so the hole
+	// appears exactly where the player's crosshair ray met the surface.
+
 	// trace ahead from the camera viewpoint
 	FHitResult OutHit;
 

@@ -19,6 +19,7 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "NiagaraFunctionLibrary.h"   // SpawnSystemAtLocation / SpawnSystemAttached
 #include "NiagaraComponent.h"         // UNiagaraComponent, to set user variables on the spawned instance
+#include "PerlinProcTerrain.h"        // Module 4: dig into the procedural terrain on hit
 
 AShooterProjectile::AShooterProjectile()
 {
@@ -180,6 +181,19 @@ void AShooterProjectile::NotifyHit(class UPrimitiveComponent* MyComp, AActor* Ot
 			// instance's parameter store; the compiled emitter scripts are shared by all
 			// instances, just like a dynamic material instance shares its parent's shaders.
 			particleComp->SetVariableLinearColor(FName("RandomColor"), randColor);
+		}
+	}
+
+	// GAM 415 Module 4: if the projectile hit the procedural terrain, dig a hole at the impact point.
+	// Cast returns null for any other actor, so walls, bots and the floor are unaffected.
+	// ImpactPoint is the exact contact point on the terrain surface (in world space);
+	// AlterMesh converts it into the terrain's local space before moving vertices.
+	if (Other != nullptr)
+	{
+		APerlinProcTerrain* procTerrain = Cast<APerlinProcTerrain>(Other);
+		if (procTerrain)
+		{
+			procTerrain->AlterMesh(Hit.ImpactPoint);
 		}
 	}
 
