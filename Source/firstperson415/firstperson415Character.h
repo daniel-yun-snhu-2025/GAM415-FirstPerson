@@ -84,6 +84,15 @@ protected:
 
 public:
 
+	/**
+	 *  GAM 415 Module 5: set by APortal while a teleport is in progress.
+	 *  After the player is moved to the other portal they are standing inside that portal's
+	 *  trigger box, which fires its overlap event straight away. Without this flag the two
+	 *  portals would keep sending the player back and forth every frame.
+	 */
+	UPROPERTY(VisibleAnywhere, Category = "Portal")
+	bool isTeleporting = false;
+
 	/** Returns the first person mesh **/
 	USkeletalMeshComponent* GetFirstPersonMesh() const { return FirstPersonMesh; }
 
