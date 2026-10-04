@@ -8,6 +8,7 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "Materials/MaterialInterface.h"
 #include "TimerManager.h"
+#include "GameFramework/Controller.h"
 
 APortal::APortal()
 {
@@ -89,6 +90,19 @@ void APortal::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* O
 				// spawn point can be placed in front of the portal in the Blueprint.
 				FVector loc = OtherPortal->rootArrow->GetComponentLocation();
 				playerChar->SetActorLocation(loc);
+
+				// Stepping Stone Four: face the player along the other portal's forward direction.
+				// The arrow's X axis is the portal's forward vector. Only its yaw is used so the
+				// player arrives looking level instead of inheriting any pitch or roll.
+				// A first person character's view comes from its controller's control rotation,
+				// not the actor rotation (the actor copies the controller yaw every frame), so the
+				// control rotation is what has to change for the camera to turn.
+				FRotator arriveRot(0.0f, OtherPortal->rootArrow->GetComponentRotation().Yaw, 0.0f);
+				playerChar->SetActorRotation(arriveRot);
+				if (AController* playerController = playerChar->GetController())
+				{
+					playerController->SetControlRotation(arriveRot);
+				}
 
 				// Clear the flag after one second. SetTimer by function name cannot pass
 				// arguments, so a timer delegate binds SetBool together with the player pointer.

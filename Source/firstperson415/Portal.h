@@ -64,7 +64,12 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Portal")
 	USceneCaptureComponent2D* sceneCapture;
 
-	/** Texture this portal's capture camera draws into. The OTHER portal's material samples it. */
+	/**
+	 *  Texture this portal's capture camera draws into. The OTHER portal's material samples it.
+	 *  RT1/RT2 are 1920x1080 (a new render target defaults to 256x256). The resolution is the
+	 *  size of the GPU texture the extra scene render fills, so it sets how sharp the portal
+	 *  looks up close and also how much GPU memory and fill cost each portal adds.
+	 */
 	UPROPERTY(EditAnywhere, Category = "Portal")
 	UTextureRenderTarget2D* renderTarget;
 
@@ -80,7 +85,11 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Portal")
 	UMaterialInterface* mat;
 
-	/** Where a player arriving through the other portal is placed. Movable in the Blueprint. */
+	/**
+	 *  Where a player arriving through the other portal is placed, and which way they face:
+	 *  the arrow's forward (X) direction becomes the player's view direction. Movable and
+	 *  rotatable in the Blueprint.
+	 */
 	UPROPERTY(EditAnywhere, Category = "Portal")
 	UArrowComponent* rootArrow;
 
