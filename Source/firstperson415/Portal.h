@@ -31,11 +31,11 @@ class UMaterialInterface;
  *  One side of a portal pair. Two instances are placed in the level and point at each other
  *  through OtherPortal.
  *
- *  Setup for a pair (Portal_A, Portal_B):
- *    Portal_A: renderTarget = RT_PortalA, mat = M_PortalB (samples RT_PortalB), OtherPortal = Portal_B
- *    Portal_B: renderTarget = RT_PortalB, mat = M_PortalA (samples RT_PortalA), OtherPortal = Portal_A
- *  Portal_A's capture camera sits near Portal_A and draws into RT_PortalA, and that image is
- *  shown on Portal_B's surface, so looking into B shows what is around A.
+ *  Setup for a pair (Portal_A, Portal_B), as placed in the levels:
+ *    Portal_A: renderTarget = RT1, mat = RT2_Mat (samples RT2), OtherPortal = Portal_B
+ *    Portal_B: renderTarget = RT2, mat = RT1_Mat (samples RT1), OtherPortal = Portal_A
+ *  Portal_A's capture camera draws into RT1, and RT1_Mat shows that image on Portal_B's
+ *  surface, so looking into B shows what is around A (and the other way round).
  */
 UCLASS()
 class FIRSTPERSON415_API APortal : public AActor
