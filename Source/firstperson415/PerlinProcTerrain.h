@@ -10,6 +10,15 @@
 //    material's texture repeats across the terrain.
 //  - Digging moves vertices on the CPU and calls UpdateMeshSection, which re-uploads the
 //    vertex buffer. The index buffer and triangle count never change, only positions do.
+//    UpdateMeshSection also passes the new positions to the triangle mesh collider
+//    (BodyInstance.UpdateTriMeshVertices), so traces and the player collide with the hole.
+//  - Engine feature trade-off: this terrain is CPU generated geometry. The UE 5.3 Lumen
+//    Technical Details page lists Software Ray Tracing geometry as Static Meshes, Instanced
+//    and Hierarchical Instanced Static Meshes and Landscape, and the Nanite documentation lists
+//    static, skeletal, instanced and spline mesh components and geometry collections; a
+//    procedural mesh component is on neither list. A static mesh or Landscape could use those
+//    GPU features, but their data is built ahead of time instead of rebuilt from arrays at
+//    runtime the way this grid is.
 
 #pragma once
 
