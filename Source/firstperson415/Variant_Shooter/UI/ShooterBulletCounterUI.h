@@ -23,4 +23,8 @@ public:
 	/** Allows Blueprint to update sub-widgets with the new life total and play a damage effect on the HUD */
 	UFUNCTION(BlueprintImplementableEvent, Category="Shooter", meta=(DisplayName = "Damaged"))
 	void BP_Damaged(float LifePercent);
+
+	/** Updates cooldown text/icon state and invalid-activation feedback for the portal ability. */
+	UFUNCTION(BlueprintImplementableEvent, Category="Shooter|Abilities", meta=(DisplayName = "Update Portal Ability"))
+	void BP_UpdatePortalAbility(bool bReady, float CooldownRemaining, bool bLastActivationValid);
 };

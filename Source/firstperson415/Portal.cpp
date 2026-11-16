@@ -9,6 +9,8 @@
 #include "Materials/MaterialInterface.h"
 #include "TimerManager.h"
 #include "GameFramework/Controller.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 
 APortal::APortal()
 {
@@ -86,22 +88,31 @@ void APortal::OnOverlapBegin(UPrimitiveComponent* OverlappedComponent, AActor* O
 				// does nothing, instead of sending the player straight back (an endless loop).
 				playerChar->isTeleporting = true;
 
-				// Arrive at the other portal's arrow component rather than its pivot, so the
-				// spawn point can be placed in front of the portal in the Blueprint.
-				FVector loc = OtherPortal->rootArrow->GetComponentLocation();
-				playerChar->SetActorLocation(loc);
+				// Preserve the player's pose and momentum relative to the entrance, even when
+				// the two portals have different rotations. The destination arrow remains the
+				// designer-controlled anchor, while the capsule sweep below keeps the player out
+				// of nearby walls and props.
+				const FTransform ArrivalTransform = TransformThroughPortal(playerChar->GetActorTransform());
+				const FVector ArrivalLocation = FindSafeArrivalLocation(playerChar);
+				const FRotator ArrivalRotation = ArrivalTransform.GetRotation().Rotator();
+				playerChar->SetActorLocationAndRotation(ArrivalLocation, ArrivalRotation, false, nullptr, ETeleportType::TeleportPhysics);
 
-				// Stepping Stone Four: face the player along the other portal's forward direction.
-				// The arrow's X axis is the portal's forward vector. Only its yaw is used so the
-				// player arrives looking level instead of inheriting any pitch or roll.
-				// A first person character's view comes from its controller's control rotation,
-				// not the actor rotation (the actor copies the controller yaw every frame), so the
-				// control rotation is what has to change for the camera to turn.
-				FRotator arriveRot(0.0f, OtherPortal->rootArrow->GetComponentRotation().Yaw, 0.0f);
-				playerChar->SetActorRotation(arriveRot);
-				if (AController* playerController = playerChar->GetController())
+				if (UCharacterMovementComponent* Movement = playerChar->GetCharacterMovement())
 				{
-					playerController->SetControlRotation(arriveRot);
+					const FVector EntryVelocity = Movement->Velocity;
+					Movement->Velocity = TransformDirectionThroughPortal(EntryVelocity);
+					UE_LOG(LogTemp, Log, TEXT("Portal: %s -> %s, portal yaw %.0f -> %.0f, velocity %s -> %s"),
+						*GetName(), *OtherPortal->GetName(), GetActorRotation().Yaw,
+						OtherPortal->rootArrow->GetComponentRotation().Yaw,
+						*EntryVelocity.ToCompactString(), *Movement->Velocity.ToCompactString());
+				}
+
+				// A first-person camera follows the controller rather than the pawn rotation, so
+				// transform the control rotation through the same portal pair.
+				if (AController* PlayerController = playerChar->GetController())
+				{
+					FTransform ViewTransform(FQuat(PlayerController->GetControlRotation()), playerChar->GetActorLocation());
+					PlayerController->SetControlRotation(TransformThroughPortal(ViewTransform).GetRotation().Rotator());
 				}
 
 				// Clear the flag after one second. SetTimer by function name cannot pass
@@ -124,6 +135,56 @@ void APortal::SetBool(Afirstperson415Character* playerChar)
 	}
 }
 
+FTransform APortal::TransformThroughPortal(const FTransform& WorldTransform) const
+{
+	if (!OtherPortal)
+	{
+		return WorldTransform;
+	}
+
+	const FTransform SourceTransform = GetActorTransform();
+	const FTransform DestinationTransform = OtherPortal->rootArrow->GetComponentTransform();
+	const FTransform RelativeTransform = WorldTransform.GetRelativeTransform(SourceTransform);
+	return RelativeTransform * DestinationTransform;
+}
+
+FVector APortal::TransformDirectionThroughPortal(const FVector& WorldDirection) const
+{
+	if (!OtherPortal)
+	{
+		return WorldDirection;
+	}
+
+	const FVector LocalDirection = GetActorTransform().InverseTransformVectorNoScale(WorldDirection);
+	return OtherPortal->rootArrow->GetComponentTransform().TransformVectorNoScale(LocalDirection);
+}
+
+FVector APortal::FindSafeArrivalLocation(const Afirstperson415Character* PlayerCharacter) const
+{
+	const FVector DesiredLocation = OtherPortal->rootArrow->GetComponentLocation();
+	if (!PlayerCharacter || !GetWorld())
+	{
+		return DesiredLocation;
+	}
+
+	const UCapsuleComponent* Capsule = PlayerCharacter->GetCapsuleComponent();
+	const float Radius = Capsule->GetScaledCapsuleRadius();
+	const float HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+	const FVector Forward = OtherPortal->rootArrow->GetForwardVector();
+	const FVector TraceStart = DesiredLocation - Forward * Radius;
+	const FVector TraceEnd = DesiredLocation + Forward * (Radius * 3.0f);
+
+	FHitResult Hit;
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(PortalArrivalSweep), false, PlayerCharacter);
+	if (GetWorld()->SweepSingleByChannel(Hit, TraceStart, TraceEnd, FQuat::Identity,
+		ECC_Pawn, FCollisionShape::MakeCapsule(Radius, HalfHeight), QueryParams))
+	{
+		return Hit.Location - Forward * 2.0f;
+	}
+
+	return TraceEnd;
+}
+
 void APortal::UpdatePortals()
 {
 	if (!OtherPortal)
@@ -131,26 +192,15 @@ void APortal::UpdatePortals()
 		return;
 	}
 
-	APlayerCameraManager* camManager = UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0);
-	if (!camManager || !camManager->GetTransformComponent())
+	APlayerCameraManager* CamManager = UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0);
+	if (!CamManager || !CamManager->GetTransformComponent())
 	{
 		return;
 	}
 
-	// Offset from the other portal to this one.
-	FVector Location = this->GetActorLocation() - OtherPortal->GetActorLocation();
-
-	// Player camera position and rotation. Index 0 = the first local player (single player).
-	FVector camLocation = camManager->GetTransformComponent()->GetComponentLocation();
-	FRotator camRotation = camManager->GetTransformComponent()->GetComponentRotation();
-
-	// Put the capture camera where the player camera would be if it stood the same distance
-	// from THIS portal as it currently stands from the other one. This portal's render target
-	// is shown on the other portal, so when the player looks at the other portal they see the
-	// view around this one from the matching position. Copying the rotation is what lets the
-	// material use screen aligned UVs: capture and screen share the same view direction.
-	// Note: this is a pure translation, so it assumes both portals face the same direction.
-	FVector CombinedLocation = camLocation + Location;
-
-	sceneCapture->SetWorldLocationAndRotation(CombinedLocation, camRotation);
+	// The render-target view now uses the same full relative position and orientation mapping
+	// as teleportation, so differently oriented portal pairs remain visually coherent.
+	const FTransform CameraTransform = CamManager->GetTransformComponent()->GetComponentTransform();
+	const FTransform CaptureTransform = OtherPortal->TransformThroughPortal(CameraTransform);
+	sceneCapture->SetWorldLocationAndRotation(CaptureTransform.GetLocation(), CaptureTransform.GetRotation().Rotator());
 }

@@ -13,6 +13,8 @@
 #include "Camera/CameraComponent.h"
 #include "TimerManager.h"
 #include "ShooterGameMode.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 
 AShooterCharacter::AShooterCharacter()
 {
@@ -21,6 +23,24 @@ AShooterCharacter::AShooterCharacter()
 
 	// configure movement
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 600.0f, 0.0f);
+
+	// GAM 495 refinement: the hero's primary spell uses the GAM 415 projectile (Projectile_Color
+	// material, Splat_Mat decal, Splat_P Niagara burst) fired by the template rifle weapon.
+	StartingSpellWeaponClass = TSoftClassPtr<AShooterWeapon>(FSoftObjectPath(
+		TEXT("/Game/Variant_Shooter/Blueprints/Pickups/Weapons/BP_ShooterWeapon_Rifle.BP_ShooterWeapon_Rifle_C")));
+}
+
+void AShooterCharacter::GrantStartingSpell()
+{
+	if (IsDead() || StartingSpellWeaponClass.IsNull())
+	{
+		return;
+	}
+	if (UClass* SpellClass = StartingSpellWeaponClass.LoadSynchronous())
+	{
+		AddWeaponClass(SpellClass);
+		UE_LOG(LogTemp, Log, TEXT("HeroSpell: equipped primary spell %s"), *SpellClass->GetName());
+	}
 }
 
 void AShooterCharacter::BeginPlay()
@@ -30,16 +50,25 @@ void AShooterCharacter::BeginPlay()
 	// reset HP to max
 	CurrentHP = MaxHP;
 
-	// update the HUD
+	// update the HUD and reset the hero ability for this life.
 	OnDamaged.Broadcast(1.0f);
+	ResetPortalAbility();
+
+	// The level's first pawn is possessed before BeginPlay (HP is still zero at that point), so the
+	// starting spell is granted here as well as on respawn possession. AddWeaponClass ignores duplicates.
+	if (IsPlayerControlled())
+	{
+		GrantStartingSpell();
+	}
 }
 
 void AShooterCharacter::EndPlay(EEndPlayReason::Type EndPlayReason)
 {
 	Super::EndPlay(EndPlayReason);
 
-	// clear the respawn timer
+	// clear lifecycle timers
 	GetWorld()->GetTimerManager().ClearTimer(RespawnTimer);
+	GetWorld()->GetTimerManager().ClearTimer(PortalCooldownTimer);
 }
 
 void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -56,6 +85,13 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 
 		// Switch weapon
 		EnhancedInputComponent->BindAction(SwitchWeaponAction, ETriggerEvent::Triggered, this, &AShooterCharacter::DoSwitchWeapon);
+
+		// Portal mobility. The null check lets template-derived Blueprints opt in by assigning
+		// an input action without breaking existing levels.
+		if (PortalAbilityAction)
+		{
+			EnhancedInputComponent->BindAction(PortalAbilityAction, ETriggerEvent::Started, this, &AShooterCharacter::ActivatePortalAbilityInput);
+		}
 	}
 
 }
@@ -68,8 +104,20 @@ float AShooterCharacter::TakeDamage(float Damage, struct FDamageEvent const& Dam
 		return 0.0f;
 	}
 
+#if !UE_BUILD_SHIPPING
+	// Development-only capture aid: launching with -GAM495DemoInvulnerable keeps the scripted
+	// demonstration camera alive while it records. Never compiled into shipping builds.
+	if (FParse::Param(FCommandLine::Get(), TEXT("GAM495DemoInvulnerable")))
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("Player: ignored %.0f damage (-GAM495DemoInvulnerable)"), Damage);
+		return 0.0f;
+	}
+#endif
+
 	// Reduce HP
 	CurrentHP -= Damage;
+	UE_LOG(LogTemp, Log, TEXT("Player: took %.0f damage from %s (HP %.0f)"), Damage,
+		DamageCauser ? *DamageCauser->GetName() : TEXT("none"), CurrentHP);
 
 	// Have we depleted HP?
 	if (CurrentHP <= 0.0f)
@@ -165,6 +213,95 @@ void AShooterCharacter::DoSwitchWeapon()
 		// activate the new weapon
 		CurrentWeapon->ActivateWeapon(PlayerTag);
 	}
+}
+
+void AShooterCharacter::ActivatePortalAbilityInput()
+{
+	TryActivatePortalAbility();
+}
+
+bool AShooterCharacter::TryActivatePortalAbility()
+{
+	if (IsDead() || !bPortalAbilityReady)
+	{
+		UE_LOG(LogTemp, Log, TEXT("PortalAbility: rejected (%s), cooldown remaining %.1fs"),
+			IsDead() ? TEXT("dead") : TEXT("cooling down"), GetPortalCooldownRemaining());
+		bLastPortalActivationValid = false;
+		BroadcastPortalAbilityState();
+		return false;
+	}
+
+	const FVector Start = GetActorLocation();
+	const FVector Forward = GetControlRotation().Vector();
+	const FVector DesiredEnd = Start + Forward * PortalAbilityDistance;
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(PortalAbility), false, this);
+	FHitResult Hit;
+	const bool bBlocked = GetWorld()->SweepSingleByChannel(Hit, Start, DesiredEnd, FQuat::Identity,
+		ECC_Pawn, FCollisionShape::MakeCapsule(GetCapsuleComponent()->GetScaledCapsuleRadius(),
+			GetCapsuleComponent()->GetScaledCapsuleHalfHeight()), QueryParams);
+	const FVector HorizontalDestination = bBlocked ? Hit.Location - Forward * 10.0f : DesiredEnd;
+
+	// Require meaningful clear travel and walkable ground. Without this probe, looking slightly
+	// upward could place the capsule beyond the level and let gravity drop the player forever.
+	FHitResult GroundHit;
+	const FVector GroundProbeStart = HorizontalDestination + FVector::UpVector * 100.0f;
+	const FVector GroundProbeEnd = GroundProbeStart - FVector::UpVector * PortalGroundProbeDistance;
+	const bool bHasGround = GetWorld()->LineTraceSingleByChannel(GroundHit, GroundProbeStart,
+		GroundProbeEnd, ECC_Visibility, QueryParams);
+	const bool bWalkableGround = bHasGround && GroundHit.ImpactNormal.Z >= GetCharacterMovement()->GetWalkableFloorZ();
+	if (FVector::DistSquared(Start, HorizontalDestination) < FMath::Square(150.0f) || !bWalkableGround)
+	{
+		UE_LOG(LogTemp, Log, TEXT("PortalAbility: blocked (%s); cooldown not consumed"),
+			bWalkableGround ? TEXT("not enough clear distance") : TEXT("no walkable ground at destination"));
+		bLastPortalActivationValid = false;
+		BroadcastPortalAbilityState();
+		return false;
+	}
+
+	const FVector Destination = GroundHit.Location + FVector::UpVector * GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	UE_LOG(LogTemp, Log, TEXT("PortalAbility: blink %.0f cm to walkable ground, cooldown %.1fs started"),
+		FVector::Dist(Start, Destination), PortalAbilityCooldown);
+	SetActorLocation(Destination, false, nullptr, ETeleportType::TeleportPhysics);
+	bPortalAbilityReady = false;
+	bLastPortalActivationValid = true;
+	PortalCooldownEndTime = GetWorld()->GetTimeSeconds() + PortalAbilityCooldown;
+	GetWorld()->GetTimerManager().SetTimer(PortalCooldownTimer, this,
+		&AShooterCharacter::CompletePortalCooldown, PortalAbilityCooldown, false);
+	BroadcastPortalAbilityState();
+	return true;
+}
+
+void AShooterCharacter::ResetPortalAbility()
+{
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(PortalCooldownTimer);
+	}
+	bPortalAbilityReady = true;
+	bLastPortalActivationValid = true;
+	PortalCooldownEndTime = 0.0f;
+	BroadcastPortalAbilityState();
+}
+
+float AShooterCharacter::GetPortalCooldownRemaining() const
+{
+	return (!bPortalAbilityReady && GetWorld())
+		? FMath::Max(0.0f, PortalCooldownEndTime - GetWorld()->GetTimeSeconds())
+		: 0.0f;
+}
+
+void AShooterCharacter::CompletePortalCooldown()
+{
+	UE_LOG(LogTemp, Log, TEXT("PortalAbility: cooldown complete, ready"));
+	bPortalAbilityReady = true;
+	bLastPortalActivationValid = true;
+	PortalCooldownEndTime = 0.0f;
+	BroadcastPortalAbilityState();
+}
+
+void AShooterCharacter::BroadcastPortalAbilityState()
+{
+	OnPortalAbilityUpdated.Broadcast(bPortalAbilityReady, GetPortalCooldownRemaining(), bLastPortalActivationValid);
 }
 
 void AShooterCharacter::AttachWeaponMeshes(AShooterWeapon* Weapon)
@@ -319,8 +456,13 @@ void AShooterCharacter::Die()
 	// disable controls
 	DisableInput(nullptr);
 
-	// reset the bullet counter UI
+	// reset HUD state and stop the ability cooldown for this life.
 	OnBulletCountUpdated.Broadcast(0, 0);
+	GetWorld()->GetTimerManager().ClearTimer(PortalCooldownTimer);
+	bPortalAbilityReady = false;
+	bLastPortalActivationValid = false;
+	PortalCooldownEndTime = 0.0f;
+	BroadcastPortalAbilityState();
 
 	// call the BP handler
 	BP_OnDeath();

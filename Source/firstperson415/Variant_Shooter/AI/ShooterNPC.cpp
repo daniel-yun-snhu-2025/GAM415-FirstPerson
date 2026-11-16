@@ -11,6 +11,7 @@
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "TimerManager.h"
+#include "GameFramework/Controller.h"
 
 void AShooterNPC::BeginPlay()
 {
@@ -43,10 +44,15 @@ float AShooterNPC::TakeDamage(float Damage, struct FDamageEvent const& DamageEve
 
 	// Reduce HP
 	CurrentHP -= Damage;
+	UE_LOG(LogTemp, Log, TEXT("ArcaneTrial: %s took %.0f damage from %s (HP %.0f)"), *GetName(), Damage,
+		EventInstigator ? *EventInstigator->GetName() : TEXT("none"), CurrentHP);
 
 	// Have we depleted HP?
 	if (CurrentHP <= 0.0f)
 	{
+		// GAM 495 refinement: only player kills advance the Arcane Trial objective, so NPC
+		// friendly fire or environmental deaths cannot complete it.
+		bKilledByPlayer = EventInstigator && EventInstigator->IsPlayerController();
 		Die();
 	}
 
@@ -169,6 +175,16 @@ void AShooterNPC::Die()
 	if (AShooterGameMode* GM = Cast<AShooterGameMode>(GetWorld()->GetAuthGameMode()))
 	{
 		GM->IncrementTeamScore(TeamByte);
+
+		// GAM 495 refinement: count this enemy toward the Arcane Trial objective.
+		if (bKilledByPlayer)
+		{
+			GM->RegisterEnemyDefeated();
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("ArcaneTrial: %s died without a player kill; objective unchanged"), *GetName());
+		}
 	}
 
 	// disable capsule collision

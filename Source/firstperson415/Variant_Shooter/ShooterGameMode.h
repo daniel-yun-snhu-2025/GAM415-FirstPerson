@@ -8,6 +8,8 @@
 
 class UShooterUI;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FArcaneTrialUpdatedDelegate, int32, EnemiesDefeated, int32, Goal, bool, bComplete);
+
 /**
  *  Simple GameMode for a first person shooter game
  *  Manages game UI
@@ -29,6 +31,16 @@ protected:
 
 	/** Map of scores by team ID */
 	TMap<uint8, int32> TeamScores;
+
+	/**
+	 * Maximum number of enemy NPCs the Arcane Trial asks for. At BeginPlay the goal is reduced to the
+	 * number of enemies the level's spawners will actually produce, so the objective is always completable.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category="Arcane Trial", meta=(ClampMin=1, ClampMax=20))
+	int32 ArcaneTrialGoal = 3;
+
+	/** Enemy NPCs defeated by the player team during this match. */
+	int32 ArcaneTrialEnemiesDefeated = 0;
 
 protected:
 
@@ -54,4 +66,15 @@ public:
 
 	/** Returns true if enemy NPCs should be used */
 	bool ShouldSpawnEnemyNPCs() const;
+
+	/** Records one defeated enemy NPC for the Arcane Trial objective and notifies the HUD. */
+	void RegisterEnemyDefeated();
+
+	/** Objective state for HUDs created after the match has started. */
+	int32 GetArcaneTrialProgress() const { return ArcaneTrialEnemiesDefeated; }
+	int32 GetArcaneTrialGoal() const { return ArcaneTrialGoal; }
+
+	/** Broadcast whenever the Arcane Trial progress changes. */
+	UPROPERTY(BlueprintAssignable, Category="Arcane Trial")
+	FArcaneTrialUpdatedDelegate OnArcaneTrialUpdated;
 };

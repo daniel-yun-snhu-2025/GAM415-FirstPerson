@@ -104,6 +104,15 @@ public:
 	UFUNCTION()
 	void SetBool(Afirstperson415Character* playerChar);
 
-	/** Places the capture camera at the player camera's position, offset between the two portals. */
+	/** Maps a world transform from this portal's local space into the destination portal's space. */
+	FTransform TransformThroughPortal(const FTransform& WorldTransform) const;
+
+	/** Maps a world-space direction (such as velocity) into the destination portal's space. */
+	FVector TransformDirectionThroughPortal(const FVector& WorldDirection) const;
+
+	/** Finds a non-overlapping arrival position near the destination arrow. */
+	FVector FindSafeArrivalLocation(const Afirstperson415Character* PlayerCharacter) const;
+
+	/** Places and rotates the capture camera using the same relative transform as teleportation. */
 	void UpdatePortals();
 };

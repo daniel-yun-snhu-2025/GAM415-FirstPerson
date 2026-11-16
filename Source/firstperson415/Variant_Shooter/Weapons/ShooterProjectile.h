@@ -73,11 +73,15 @@ public:
 	UPROPERTY()
 	UMaterialInstanceDynamic* dmiMat;
 
-	/**
-	 *  Random color chosen once at BeginPlay and shared by the mesh and the decal.
-	 *  Stored as a member (not a local) because BeginPlay and NotifyHit run at different times.
-	 *  FLinearColor is linear-space RGBA floats, the format material vector parameters expect.
-	 */
+	/** Consistent arcane color shared by the projectile, impact decal, and Niagara effect. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Projectile|Spell")
+	FLinearColor SpellColor = FLinearColor(0.12f, 0.45f, 1.0f, 1.0f);
+
+	/** How long the impact decal remains before it fades and releases its render resources. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Projectile|Spell", meta = (ClampMin = 0.1, ClampMax = 30.0, Units = "s"))
+	float DecalLifeSeconds = 8.0f;
+
+	/** Runtime spell color cached for Blueprint compatibility with the original artifact. */
 	UPROPERTY(BlueprintReadOnly, Category="Projectile|GAM415")
 	FLinearColor randColor;
 

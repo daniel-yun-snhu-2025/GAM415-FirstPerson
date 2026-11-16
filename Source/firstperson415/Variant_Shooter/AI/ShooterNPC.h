@@ -85,6 +85,9 @@ protected:
 	/** If true, this character has already died */
 	bool bIsDead = false;
 
+	/** True when the damage that killed this NPC came from a player-controlled pawn. */
+	bool bKilledByPlayer = false;
+
 	/** Deferred destruction on death timer */
 	FTimerHandle DeathTimer;
 
