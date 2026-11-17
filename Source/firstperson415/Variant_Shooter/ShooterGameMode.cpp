@@ -8,6 +8,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerStart.h"
 #include "ShooterPlayerController.h"
+#include "ShooterNPCSpawner.h"
+#include "EngineUtils.h"
 
 void AShooterGameMode::BeginPlay()
 {
@@ -17,6 +19,22 @@ void AShooterGameMode::BeginPlay()
 	if ((ShooterUI = CreateWidget<UShooterUI>(UGameplayStatics::GetPlayerController(GetWorld(), 0), ShooterUIClass)))
 	{
 		ShooterUI->AddToViewport(0);
+	}
+
+	// GAM 495 refinement: size the Arcane Trial to the enemies this level will spawn.
+	if (ShouldSpawnEnemyNPCs())
+	{
+		int32 SpawnableEnemies = 0;
+		for (TActorIterator<AShooterNPCSpawner> It(GetWorld()); It; ++It)
+		{
+			SpawnableEnemies += FMath::Max(0, It->GetRemainingSpawnCount());
+		}
+		if (SpawnableEnemies > 0)
+		{
+			ArcaneTrialGoal = FMath::Min(ArcaneTrialGoal, SpawnableEnemies);
+		}
+		UE_LOG(LogTemp, Log, TEXT("ArcaneTrial: level spawns %d enemies, goal %d"), SpawnableEnemies, ArcaneTrialGoal);
+		OnArcaneTrialUpdated.Broadcast(ArcaneTrialEnemiesDefeated, ArcaneTrialGoal, false);
 	}
 
 	// create each additional local player.
@@ -83,4 +101,20 @@ bool AShooterGameMode::ShouldSpawnEnemyNPCs() const
 {
 	// only spawn enemy NPCs in single player mode
 	return NumberOfLocalPlayers < 2;
+}
+
+void AShooterGameMode::RegisterEnemyDefeated()
+{
+	// GAM 495 refinement: the template's AI enemies become a short objective. The count stops at
+	// the level-derived goal so late kills cannot push the HUD past the displayed total.
+	if (ArcaneTrialEnemiesDefeated >= ArcaneTrialGoal)
+	{
+		return;
+	}
+
+	++ArcaneTrialEnemiesDefeated;
+	const bool bComplete = ArcaneTrialEnemiesDefeated >= ArcaneTrialGoal;
+	UE_LOG(LogTemp, Log, TEXT("ArcaneTrial: enemies defeated %d / %d%s"), ArcaneTrialEnemiesDefeated, ArcaneTrialGoal,
+		bComplete ? TEXT(" - COMPLETE") : TEXT(""));
+	OnArcaneTrialUpdated.Broadcast(ArcaneTrialEnemiesDefeated, ArcaneTrialGoal, bComplete);
 }

@@ -68,4 +68,8 @@ protected:
 	UFUNCTION()
 	void OnNPCDied();
 
+public:
+	/** Number of NPCs this spawner will still produce (used to size the Arcane Trial objective). */
+	int32 GetRemainingSpawnCount() const { return SpawnCount; }
+
 };

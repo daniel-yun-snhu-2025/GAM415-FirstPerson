@@ -14,6 +14,7 @@ class UPawnNoiseEmitterComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FBulletCountUpdatedDelegate, int32, MagazineSize, int32, Bullets);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FDamagedDelegate, float, LifePercent);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FPortalAbilityUpdatedDelegate, bool, bReady, float, CooldownRemaining, bool, bLastActivationValid);
 
 /**
  *  A player controllable first person shooter character
@@ -38,6 +39,35 @@ protected:
 	/** Switch weapon input action */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* SwitchWeaponAction;
+
+	/** Portal mobility input action. Blueprint assigns an Enhanced Input action asset. */
+	UPROPERTY(EditAnywhere, Category ="Input")
+	UInputAction* PortalAbilityAction;
+
+	/** Cooldown between portal mobility activations. */
+	UPROPERTY(EditAnywhere, Category="Abilities|Portal", meta=(ClampMin=0.1, ClampMax=30.0, Units="s"))
+	float PortalAbilityCooldown = 6.0f;
+
+	/** Maximum clear distance for the short mobility blink. */
+	UPROPERTY(EditAnywhere, Category="Abilities|Portal", meta=(ClampMin=100.0, ClampMax=3000.0, Units="cm"))
+	float PortalAbilityDistance = 1000.0f;
+
+	/** Downward trace used to require walkable ground at the destination. */
+	UPROPERTY(EditAnywhere, Category="Abilities|Portal", meta=(ClampMin=100.0, ClampMax=3000.0, Units="cm"))
+	float PortalGroundProbeDistance = 1200.0f;
+
+	bool bPortalAbilityReady = true;
+	bool bLastPortalActivationValid = true;
+	float PortalCooldownEndTime = 0.0f;
+	FTimerHandle PortalCooldownTimer;
+
+	/**
+	 * Primary spell the hero starts every life with. The template made the player find a weapon
+	 * pickup first; the hero design gives the arcane projectile from spawn. Soft reference so the
+	 * Blueprint weapon is only loaded for player characters.
+	 */
+	UPROPERTY(EditAnywhere, Category ="Weapons")
+	TSoftClassPtr<AShooterWeapon> StartingSpellWeaponClass;
 
 	/** Name of the first person mesh weapon socket */
 	UPROPERTY(EditAnywhere, Category ="Weapons")
@@ -89,6 +119,9 @@ public:
 	/** Damaged delegate */
 	FDamagedDelegate OnDamaged;
 
+	/** Portal ability state delegate used by HUD and accessibility feedback. */
+	FPortalAbilityUpdatedDelegate OnPortalAbilityUpdated;
+
 public:
 
 	/** Constructor */
@@ -136,6 +169,24 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	void DoSwitchWeapon();
 
+	/** Input-compatible portal mobility handler. */
+	void ActivatePortalAbilityInput();
+
+	/** Attempts portal mobility; reports invalid targets and starts cooldown on success. */
+	UFUNCTION(BlueprintCallable, Category="Abilities|Portal")
+	bool TryActivatePortalAbility();
+
+	/** Equips the hero's primary spell; called by the player controller after possession. */
+	void GrantStartingSpell();
+
+	/** Resets portal ability state, used by spawn and death/respawn lifecycle. */
+	UFUNCTION(BlueprintCallable, Category="Abilities|Portal")
+	void ResetPortalAbility();
+
+	/** Remaining portal cooldown for HUD display. */
+	UFUNCTION(BlueprintPure, Category="Abilities|Portal")
+	float GetPortalCooldownRemaining() const;
+
 public:
 
 	//~Begin IShooterWeaponHolder interface
@@ -173,6 +224,12 @@ protected:
 
 	/** Returns true if the character already owns a weapon of the given class */
 	AShooterWeapon* FindWeaponOfType(TSubclassOf<AShooterWeapon> WeaponClass) const;
+
+	/** Completes the portal cooldown and tells the HUD the ability is ready. */
+	void CompletePortalCooldown();
+
+	/** Broadcasts the current portal ability state to HUD listeners. */
+	void BroadcastPortalAbilityState();
 
 	/** Called when this character's HP is depleted */
 	void Die();

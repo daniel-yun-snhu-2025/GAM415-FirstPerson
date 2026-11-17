@@ -20,6 +20,9 @@
 #include "NiagaraFunctionLibrary.h"   // SpawnSystemAtLocation / SpawnSystemAttached
 #include "NiagaraComponent.h"         // UNiagaraComponent, to set user variables on the spawned instance
 #include "PerlinProcTerrain.h"        // Module 4: dig into the procedural terrain on hit
+#include "ShooterCharacter.h"
+#include "ShooterPlayerController.h"
+#include "ShooterNativeHUD.h"
 
 AShooterProjectile::AShooterProjectile()
 {
@@ -60,14 +63,9 @@ void AShooterProjectile::BeginPlay()
 	// ignore the pawn that shot this projectile
 	CollisionComponent->IgnoreActorWhenMoving(GetInstigator(), true);
 
-	// GAM 415: pick the color once, as soon as the projectile spawns, so the mesh is colored
-	// from its first rendered frame and the decal can reuse the exact same value later.
-	// Linear RGB in [0,1] plus alpha 1: this is uploaded to the GPU as a float4 constant.
-	randColor = FLinearColor(
-		UKismetMathLibrary::RandomFloatInRange(0.0f, 1.0f),
-		UKismetMathLibrary::RandomFloatInRange(0.0f, 1.0f),
-		UKismetMathLibrary::RandomFloatInRange(0.0f, 1.0f),
-		1.0f);
+	// A consistent spell color makes the projectile readable as one hero ability instead of a
+	// random paint effect. The same value drives the mesh, decal, and Niagara user parameter.
+	randColor = SpellColor;
 
 	if (projMat && ballMesh)
 	{
@@ -124,6 +122,18 @@ void AShooterProjectile::NotifyHit(class UPrimitiveComponent* MyComp, AActor* Ot
 
 	}
 
+	// Give the local player a brief, readable hit confirmation without requiring a Blueprint.
+	// Only character hits count, so painting a wall does not look like damaging an enemy.
+	ACharacter* HitCharacter = Cast<ACharacter>(Other);
+	AShooterCharacter* Shooter = Cast<AShooterCharacter>(GetInstigator());
+	if (HitCharacter && Shooter && HitCharacter != Shooter)
+	{
+		if (AShooterPlayerController* PlayerController = Cast<AShooterPlayerController>(Shooter->GetController()))
+		{
+			PlayerController->ShowHitFeedback();
+		}
+	}
+
 	// GAM 415: spawn a paint splat decal on the surface we hit, matching the projectile color.
 	// Only when we actually hit something and a decal material was assigned in the Blueprint.
 	if (Other != nullptr && baseMat != nullptr)
@@ -143,11 +153,11 @@ void AShooterProjectile::NotifyHit(class UPrimitiveComponent* MyComp, AActor* Ot
 		//  - Hit.Normal.Rotation(): a rotator whose X axis is the surface normal. Decals
 		//    project along their local X axis, so this makes the splat lie flat on the surface
 		//    and face the right way (a wall gets a vertical splat, the floor a horizontal one).
-		//  - Life span 0 = never auto-destroyed.
+		// A finite lifetime keeps long play sessions from accumulating permanent decal components.
 		// Being a *deferred* decal, its material does not draw geometry; during the deferred
 		// pass the GPU reconstructs the surface position from the depth buffer for every pixel
 		// inside the box and blends the decal's Base Color/Opacity into that surface's shading.
-		auto Decal = UGameplayStatics::SpawnDecalAtLocation(GetWorld(), baseMat, decalSize, Hit.Location, Hit.Normal.Rotation(), 0.0f);
+		auto Decal = UGameplayStatics::SpawnDecalAtLocation(GetWorld(), baseMat, decalSize, Hit.Location, Hit.Normal.Rotation(), DecalLifeSeconds);
 		if (Decal)
 		{
 			// Give this decal its own Dynamic Material Instance (same idea as the ball mesh:
